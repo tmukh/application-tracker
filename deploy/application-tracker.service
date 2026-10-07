@@ -1,0 +1,18 @@
+[Unit]
+Description=Application Tracker (mail collector, classifier and dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__APPDIR__
+EnvironmentFile=__ENVFILE__
+ExecStart=__APPDIR__/.venv/bin/python -m tracker
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

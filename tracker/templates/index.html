@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block body %}
+{% if upcoming %}
+<div class="panel">
+  <strong>Upcoming interviews</strong>
+  {% for a in upcoming %}<div class="small"><a href="{{ url_for('detail', app_id=a.id) }}">{{ a.company }}</a> <span class="muted">{{ a.role }}</span> &middot; {{ a.interview_at }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<div class="panel">
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <strong>Add emails</strong>
+    <input type="file" name="files" multiple accept=".eml,.mbox" required>
+    <button class="primary">Upload and read</button>
+    <span class="muted small">Export messages from your Bewerbung label in Proton Mail as .eml, then drop them here. Files already read are skipped.</span>
+  </form>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">
+  <a class="chip" style="background:var(--panel);text-decoration:none;color:var(--ink);{% if not status %}outline:2px solid var(--accent){% endif %}" href="{{ url_for('index') }}">All {{ total }}</a>
+  {% for s in STATUSES %}{% if counts.get(s) %}<a class="chip {{ s }}" style="text-decoration:none;{% if status==s %}outline:2px solid var(--accent){% endif %}" href="{{ url_for('index', status=s) }}">{{ s }} {{ counts[s] }}</a>{% endif %}{% endfor %}
+  <form method="get" style="margin-left:auto"><input name="q" value="{{ q }}" placeholder="Search company or role"><input type="hidden" name="status" value="{{ status }}"></form>
+</div>
+
+<div class="panel tablewrap" style="padding:4px 6px">
+<table>
+  <tr><th>Company</th><th>Role</th><th>Status</th><th>Applied</th><th class="hide-sm">Last activity</th><th class="hide-sm">Mails</th></tr>
+  {% for a in apps %}
+  <tr>
+    <td><a href="{{ url_for('detail', app_id=a.id) }}"><strong>{{ a.company }}</strong></a></td>
+    <td>{{ a.role }}</td>
+    <td><span class="chip {{ a.status }}">{{ a.status }}</span>{% if a.status_locked %} <span class="muted small" title="Set by hand, emails won't change it">&#128274;</span>{% endif %}
+      {% if a.status == 'applied' and (a.applied_date|days_ago) is not none and (a.applied_date|days_ago) >= 14 %}<div class="small muted">no reply for {{ a.applied_date|days_ago }} days</div>{% endif %}</td>
+    <td>{{ a.applied_date or '-' }}</td>
+    <td class="hide-sm">{{ a.last_activity or '-' }}</td>
+    <td class="hide-sm">{{ a.n_emails }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">Nothing here yet. Upload some emails above, or run <code>python -m tracker import job_search_tracker_v2.xlsx</code> to bring in your old sheet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<details class="panel">
+  <summary>Add an application by hand</summary>
+  <form method="post" action="{{ url_for('add') }}" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+    <input name="company" placeholder="Company" required><input name="role" placeholder="Role"><input type="date" name="applied_date"><button>Add</button>
+  </form>
+</details>
+{% endblock %}

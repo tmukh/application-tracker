@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block body %}
+<h2 style="margin-top:0">Review queue</h2>
+<p class="muted">Emails the tracker was not sure about. Your choice overrides the classifier and is never changed again.</p>
+{% for e in emails %}
+<div class="panel">
+  <div><strong>{{ e.subject }}</strong></div>
+  <div class="small muted">{{ e.sent_date }} &middot; {{ e.from_name }} &lt;{{ e.from_addr }}&gt;</div>
+  <div class="small" style="color:var(--warn);margin:4px 0">{{ e.review_reason }}</div>
+  {% if e.summary %}<div class="small muted">{{ e.summary }}</div>{% endif %}
+  <details class="small"><summary class="muted">Show email</summary><pre style="white-space:pre-wrap;font:inherit">{{ e.body[:2500] }}</pre></details>
+  <form method="post" action="{{ url_for('resolve', email_id=e.id) }}" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:end">
+    <label class="small">This email is<br><select name="event_type">{% for t in event_types %}<option value="{{ t }}" {% if t==e.event_type %}selected{% endif %}>{{ EVENT_LABELS[t] }}</option>{% endfor %}</select></label>
+    <label class="small">Belongs to<br><select name="application">
+      <option value="none">(no application)</option>
+      <option value="new">+ new application</option>
+      {% for a in apps %}<option value="{{ a.id }}" {% if a.id==e.application_id %}selected{% endif %}>{{ a.company }} {{ a.role }}</option>{% endfor %}
+    </select></label>
+    <label class="small">New: company<br><input name="company" value="{{ e.company }}"></label>
+    <label class="small">role<br><input name="role" value="{{ e.role }}"></label>
+    <button class="primary">Confirm</button>
+  </form>
+</div>
+{% else %}
+<div class="panel muted">Nothing to review.</div>
+{% endfor %}
+{% endblock %}

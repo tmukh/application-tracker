@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+ .grid{display:grid;grid-template-columns:170px 1fr;gap:8px 12px;align-items:center;max-width:720px}
+ .grid label{color:var(--muted);font-size:13px}.grid input,.grid select{width:100%}
+ h2{font-size:16px;margin:0 0 6px}.hint{color:var(--muted);font-size:13px;margin:0 0 10px}
+ .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.res{font-size:13px}
+ @media (max-width:620px){.grid{grid-template-columns:1fr}}
+</style>
+
+<form method="post" action="{{ url_for('settings_save') }}" id="f">
+
+<div class="panel">
+  <h2>1. Mail</h2>
+  <p class="hint">Where your application emails are read from. For Proton Mail, start Proton Mail Bridge and copy its username and its generated password (not your Proton password). The app only reads; it never changes or deletes mail.</p>
+  <div class="grid">
+    <label>Server</label><input name="IMAP_HOST" value="{{ s.IMAP_HOST }}" placeholder="127.0.0.1">
+    <label>Port</label><input name="IMAP_PORT" value="{{ s.IMAP_PORT }}" inputmode="numeric">
+    <label>Security</label>
+    <select name="IMAP_SECURITY">
+      {% for o,t in [('starttls','STARTTLS (Proton Bridge)'),('ssl','SSL (Gmail and most others)'),('none','None (this computer only)')] %}
+      <option value="{{ o }}" {% if s.IMAP_SECURITY==o %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+    <label>Username</label><input name="IMAP_USER" value="{{ s.IMAP_USER }}" autocomplete="off">
+    <label>Password</label><input name="IMAP_PASSWORD" type="password" autocomplete="new-password" placeholder="{{ 'saved; leave empty to keep it' if s.has_password else 'Bridge / app password' }}">
+    <label>Folder / label</label>
+    <div id="mailbox-box"><input name="IMAP_MAILBOX" id="mailbox" value="{{ s.IMAP_MAILBOX }}"></div>
+  </div>
+  <div class="row"><button type="button" id="btn-mail">Connect and list my folders</button><span class="res" id="res-mail"></span></div>
+</div>
+
+<div class="panel">
+  <h2>2. Language model</h2>
+  <p class="hint">Ollama reads each email and decides what it is. It can run on another computer, for example the desktop with the GPU.</p>
+  <div class="grid">
+    <label>Classifier</label>
+    <select name="CLASSIFIER">
+      <option value="ollama" {% if s.CLASSIFIER=='ollama' %}selected{% endif %}>Ollama (recommended)</option>
+      <option value="keywords" {% if s.CLASSIFIER=='keywords' %}selected{% endif %}>Keywords only (no model, less accurate)</option>
+    </select>
+    <label>Ollama address</label><input name="OLLAMA_URL" value="{{ s.OLLAMA_URL }}">
+    <label>Model</label><div id="model-box"><input name="OLLAMA_MODEL" id="model" value="{{ s.OLLAMA_MODEL }}" placeholder="empty = first installed model"></div>
+  </div>
+  <div class="row"><button type="button" id="btn-model">Connect and list models</button><span class="res" id="res-model"></span></div>
+</div>
+
+<div class="panel">
+  <h2>3. Cutoff and schedule</h2>
+  <p class="hint">Mail sent before the cutoff date is never stored. Leave it empty to keep everything.</p>
+  <div class="grid">
+    <label>Ignore mail before</label><input name="EARLIEST_DATE" value="{{ s.EARLIEST_DATE }}" placeholder="2026-01-01">
+    <label>Check mail every (s)</label><input name="POLL_SECONDS" value="{{ s.POLL_SECONDS }}" inputmode="numeric">
+  </div>
+</div>
+
+<button class="primary" type="submit">Save settings</button>
+</form>
+
+<div class="panel" style="margin-top:16px">
+  <h2>Clean up old data</h2>
+  {% if not s.EARLIEST_DATE %}
+    <p class="hint">No cutoff is set, so nothing counts as old.</p>
+  {% elif preview.emails or preview.applications %}
+    <p>Before {{ s.EARLIEST_DATE }} there are <strong>{{ preview.emails }} emails</strong> and <strong>{{ preview.applications }} applications</strong> stored. Old applications that got a reply this year are kept.</p>
+    <form method="post" action="{{ url_for('settings_prune') }}" onsubmit="return confirm('Delete {{ preview.emails }} emails and {{ preview.applications }} applications from before {{ s.EARLIEST_DATE }}? A backup is made first.')">
+      <input type="hidden" name="confirm" value="yes"><button class="danger">Delete data from before {{ s.EARLIEST_DATE }}</button>
+    </form>
+  {% else %}
+    <p class="hint">Nothing older than {{ s.EARLIEST_DATE }} is stored.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Backup and import</h2>
+  <div class="row" style="margin-top:0">
+    <a class="btn" href="{{ url_for('settings_backup') }}">Download a backup</a>
+    <span class="hint" style="margin:0">A copy of the database. It never contains your mail password.</span>
+  </div>
+  <form method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data" class="row">
+    <span>Import an old tracker (.xlsx):</span><input type="file" name="sheet" accept=".xlsx"><button>Import</button>
+  </form>
+</div>
+
+<script>
+(function(){
+  function post(url){ return fetch(url,{method:'POST',body:new FormData(document.getElementById('f'))}).then(r=>r.json()); }
+  // After connecting, the text box becomes a drop-down of what the server really has.
+  function pick(boxId,name,items,current,allowEmpty){
+    var box=document.getElementById(boxId), sel=document.createElement('select'); sel.name=name; sel.id=boxId+'-sel';
+    if(allowEmpty){var e=document.createElement('option');e.value='';e.textContent='first installed model';sel.appendChild(e);}
+    if(current && items.indexOf(current)<0){items=[current].concat(items);}
+    items.forEach(function(n){var o=document.createElement('option');o.value=n;o.textContent=n;if(n===current)o.selected=true;sel.appendChild(o);});
+    box.innerHTML=''; box.appendChild(sel);
+  }
+  function wire(btn,res,url,key,boxId,name,allowEmpty,noun){
+    document.getElementById(btn).onclick=function(){
+      var out=document.getElementById(res); out.style.color=''; out.textContent='Connecting...';
+      var cur=(document.querySelector('[name="'+name+'"]')||{}).value||'';
+      post(url).then(function(d){
+        if(!d.ok){out.style.color='var(--rejected)';out.textContent=d.error;return;}
+        out.style.color='var(--offer)'; out.textContent='Connected. '+d[key].length+' '+noun+' found. Pick one, then press Save settings.';
+        pick(boxId,name,d[key],cur,allowEmpty);
+      }).catch(function(e){out.style.color='var(--rejected)';out.textContent='Failed: '+e;});
+    };
+  }
+  wire('btn-mail','res-mail','{{ url_for("settings_mailboxes") }}','mailboxes','mailbox-box','IMAP_MAILBOX',false,'folders');
+  wire('btn-model','res-model','{{ url_for("settings_models") }}','models','model-box','OLLAMA_MODEL',true,'models');
+})();
+</script>
+{% endblock %}

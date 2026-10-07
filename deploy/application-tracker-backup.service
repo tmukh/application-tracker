@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up the Application Tracker database
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__APPDIR__
+EnvironmentFile=__ENVFILE__
+ExecStart=__APPDIR__/.venv/bin/python -m tracker backup __BACKUPDIR__

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block body %}
+<p><a href="{{ url_for('index') }}">&larr; All applications</a></p>
+<div class="panel">
+  <h2 style="margin:0 0 4px">{{ a.company }} <span class="chip {{ a.status }}">{{ a.status }}</span></h2>
+  <div class="muted">{{ a.role }}{% if a.interview_at %} &middot; interview {{ a.interview_at }}{% endif %}</div>
+</div>
+
+<div class="panel">
+  <h3 style="margin-top:0">Timeline</h3>
+  {% for e in emails %}
+  <div style="border-left:3px solid var(--line);padding:2px 0 10px 12px;margin-left:4px">
+    <div><strong>{{ e.sent_date }}</strong> &middot; {{ EVENT_LABELS.get(e.event_type, e.event_type) }}
+      {% if e.needs_review %}<span class="badge">check</span>{% endif %}</div>
+    <div class="small">{{ e.subject }}</div>
+    {% if e.summary %}<div class="small muted">{{ e.summary }}</div>{% endif %}
+    {% if e.review_reason %}<div class="small" style="color:var(--warn)">{{ e.review_reason }}</div>{% endif %}
+    <details class="small"><summary class="muted">Show email ({{ e.classifier or 'unclassified' }})</summary><pre style="white-space:pre-wrap;font:inherit">{{ e.body[:3000] }}</pre></details>
+  </div>
+  {% else %}
+  <div class="muted">No emails linked to this application yet.</div>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <h3 style="margin-top:0">Edit</h3>
+  <form method="post" action="{{ url_for('update', app_id=a.id) }}" style="display:grid;gap:10px;max-width:560px">
+    <label>Company<br><input name="company" value="{{ a.company }}" style="width:100%"></label>
+    <label>Role<br><input name="role" value="{{ a.role }}" style="width:100%"></label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <label>Applied<br><input type="date" name="applied_date" value="{{ a.applied_date or '' }}"></label>
+      <label>Status<br><select name="status">{% for s in STATUSES %}<option value="{{ s }}" {% if s==a.status %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+      <label>Category<br><input name="category" value="{{ a.category }}" placeholder="Startup, Public ..."></label>
+    </div>
+    <label>Notes<br><textarea name="notes" rows="3" style="width:100%">{{ a.notes }}</textarea></label>
+    <p class="small muted" style="margin:0">If you change the status by hand, new emails stop changing it. {% if a.status_locked %}<label><input type="checkbox" name="unlock" value="1"> Let emails update the status again</label>{% endif %}</p>
+    <div><button class="primary">Save</button></div>
+  </form>
+  <form method="post" action="{{ url_for('delete', app_id=a.id) }}" onsubmit="return confirm('Delete this application?')" style="margin-top:12px"><button class="danger">Delete application</button></form>
+</div>
+{% endblock %}
