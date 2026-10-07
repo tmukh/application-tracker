@@ -33,6 +33,13 @@ def refuse_other_websites():
             abort(403)
 
 
+@app.get("/healthz")
+def healthz():
+    """For container probes (Docker, Kubernetes). Deliberately touches no database and no mail server, so a slow
+    Ollama or Bridge can never make Kubernetes think the dashboard is dead and restart it."""
+    return "ok", 200, {"Content-Type": "text/plain", "Cache-Control": "no-store"}
+
+
 @app.template_filter("days_ago")
 def days_ago(d):
     try:

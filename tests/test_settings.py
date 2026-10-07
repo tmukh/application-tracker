@@ -111,3 +111,8 @@ def test_welcome_banner_until_mail_is_connected(client):
     assert b"not connected yet" in client.get("/").data
     settings.save({"IMAP_HOST": "127.0.0.1", "IMAP_USER": "a@b.c", "IMAP_PASSWORD": "pw"})
     assert b"not connected yet" not in client.get("/").data
+
+
+def test_healthz_is_cheap_and_always_ok(client):
+    r = client.get("/healthz")
+    assert r.status_code == 200 and r.data == b"ok"

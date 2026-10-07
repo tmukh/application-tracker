@@ -42,6 +42,23 @@ On Linux or macOS: `python -m venv .venv && .venv/bin/pip install -r requirement
 To run it all day on an always-on machine, reach it from your phone, and keep the model on a different computer,
 follow **[SETUP.md](SETUP.md)**.
 
+## Run in a container or on Kubernetes
+
+The `Dockerfile` builds a small image (non-root, everything that changes lives in the `/data` volume):
+
+```
+docker build -t application-tracker .
+docker run -d -p 127.0.0.1:5055:5055 -v tracker-data:/data application-tracker
+```
+
+Inside a container the app listens on all interfaces, which is correct there; the port mapping above is what keeps it
+local. **Publish it only to 127.0.0.1 or put it behind something that checks who you are**, because the dashboard has no
+login. Mail needs a Proton Mail Bridge the container can reach: set the host on the Settings page, or run Bridge as a second
+container in the same pod and use `127.0.0.1`. `GET /healthz` is a cheap probe that does not touch the database or the model.
+
+A complete Kubernetes setup (Argo CD, Bridge in the same pod, Tailscale-only access, NetworkPolicy, nightly backup) is described in the author's
+[homelab-dev](https://github.com/tmukh/homelab-dev) repository.
+
 ## Privacy and safety
 
 - Mail is read-only and classification runs on your own Ollama model. The data lives in one local SQLite file
@@ -89,7 +106,7 @@ tracker/linker.py       which application an email belongs to, and the status ru
 tracker/pipeline.py     the workflow: collect, classify, link, one-time data fixes
 tracker/service.py      the background worker
 tracker/settings.py     settings saved from the dashboard
-tracker/app.py          the web dashboard
+tracker/app.py          the web dashboard (and /healthz for container probes)
 deploy/                 systemd units and installer for an always-on machine
 scripts/                publishing check, demo data and screenshot generator
 tests/                  pytest suite (fake mail server and fake Ollama, no network needed)
