@@ -41,6 +41,18 @@ def days_ago(d):
         return None
 
 
+@app.template_filter("nice_dt")
+def nice_dt(v):
+    """'2026-10-09T14:00:00+01:00' -> 'Fri 9 Oct, 14:00'. Unreadable values are shown as they are."""
+    from datetime import datetime
+    try:
+        dt = datetime.fromisoformat(v)
+    except (TypeError, ValueError):
+        return v or ""
+    day = f"{dt:%a} {dt.day} {dt:%b}"
+    return day + (f", {dt:%H:%M}" if "T" in v else "")
+
+
 @app.context_processor
 def inject():
     conn = db.connect()

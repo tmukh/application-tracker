@@ -365,3 +365,11 @@ def test_invite_after_a_rejection_for_a_different_title_is_a_new_application():
     conn.commit()
     pipeline.link_email(conn, 3)
     assert len(apps(conn)) == 2 and apps(conn)[0]["status"] == "rejected" and apps(conn)[1]["status"] == "interview"
+
+
+def test_interview_times_are_shown_readably():
+    from tracker.app import nice_dt
+    assert nice_dt("2026-10-09T14:00:00") == "Fri 9 Oct, 14:00"
+    assert nice_dt("2026-10-05T14:00:00+01:00") == "Mon 5 Oct, 14:00"
+    assert nice_dt("2026-10-02") == "Fri 2 Oct"
+    assert nice_dt("Friday afternoon") == "Friday afternoon" and nice_dt("") == ""

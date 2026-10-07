@@ -1,123 +1,128 @@
-## Mail source and deployment
-
-The tracker reads your Proton label directly over IMAP through Proton Mail Bridge (paid plan) and keeps
-running as a background worker: it polls, stores mail, and classifies it from a queue so an offline model
-only delays things. Configuration is done in the dashboard; `.env` (see `.env.example`) is optional. Step-by-step install for the
-desktop, the laptop and the service: see **SETUP.md**.
-
-Everything is done in the dashboard (Settings page): connect mail, pick the folder and model, set the cutoff,
-delete old data, download a backup, import an old spreadsheet. The only command you ever run is the first start
-(`run.bat` on Windows, `python -m tracker` elsewhere). Advanced commands such as `sync`, `prune`, `backup` and
-`imap-list` exist for scripts and the systemd timer but are never required.
-
 # Application Tracker
 
-Reads your application emails, works out what each one is (confirmation, interview, rejection ...),
-links it to the right application and keeps a status table up to date. Everything runs on your own
-computer: the emails, the database and the language model (Ollama) never leave it.
+Reads your job-application emails, works out what each one is (confirmation, interview invite, rejection ...),
+links it to the right application and keeps a status board up to date. It runs on your own machines: your
+emails, the database and the language model (Ollama) never go to a cloud service.
 
-## Set up (Windows, about five minutes)
+<p align="center"><img src="docs/images/walkthrough.gif" alt="Walkthrough of the dashboard: filter interviews, open an application, the review queue, settings" width="820"></p>
 
-1. Install Python 3.11 or newer if you do not have it (`py --version` in a terminal shows it).
-2. Make sure Ollama is running and has a model: `ollama list`. If it is empty, `ollama pull qwen2.5:7b`
-   (a 7-8B model handles German and English mail well enough; bigger is better but slower).
-3. Double-click `run.bat`. The first run creates a virtual environment and installs Flask, requests,
-   tzdata and openpyxl. Then open http://127.0.0.1:5055.
-
-To pin a model, set `OLLAMA_MODEL` before starting (for example `set OLLAMA_MODEL=qwen2.5:7b`).
-Without it, the first model in `ollama list` is used.
-
-## Getting your emails in (free Proton plan)
-
-Proton's Bridge (the IMAP connector) needs a paid plan, so the app takes exported files instead:
-
-1. In Proton Mail on the web, open your Bewerbung label, open a message, use the three-dot menu and
-   look for **Export** (it saves an `.eml` file). As far as I know this works on free accounts, but I
-   could not check it on yours.
-2. Drag the `.eml` files onto the page ("Add emails"). `.mbox` files work too, if you have a bulk export.
-3. Files you upload are read once and moved to `data/processed`. Re-uploading the same mail does nothing.
-
-Do this after each batch of replies. It is a manual step; it is the price of not paying for Bridge.
-
-## Bring in your old spreadsheet
-
-```
-.venv\Scripts\activate
-python -m tracker import "..\job_search_tracker_v2.xlsx"
-```
-
-Imported rows are matched loosely, so a later email from the same company attaches to the imported row
-instead of creating a duplicate.
-
-## How it decides things, and why
-
-* **Two opinions per email.** The local model returns structured JSON (type, company, role, interview
-  time, one-line summary). A set of German/English keyword rules classifies the same email independently.
-  If they disagree about something that matters (say the model says "follow-up" and the text says
-  "we regret to inform you"), the email goes to the **Review** page instead of silently changing a status.
-  Small local models are good, not perfect, and a wrongly marked rejection is worse than one extra click.
-* **Thread first, then company.** A reply is linked through the email headers (`In-Reply-To`). If that
-  fails, by company name, then by the sender's own domain. Recruiting platforms (Personio, Greenhouse,
-  Join ...) are ignored for domain matching because they send for many employers.
-* **A confirmation means a new application** unless the exact same job title is already tracked.
-  This keeps "Cloud Engineer" and "Cloud Software Engineer" at the same company as two applications.
-  If a reply could belong to several applications at one company, it is flagged for review.
-* **Status is derived from the emails in time order.** Order of progress is applied, assessment,
-  interview, offer. A rejection closes the application, and a later positive email reopens it.
-* **If you change a status by hand, it is locked** and emails stop changing it, so your decision wins.
-  Tick "Let emails update the status again" to undo that.
-* **No answer for 14 days** is shown under "applied", because silence is usually a rejection that never came.
-
-## Commands
-
-| Command | Does |
+| Dashboard | One application |
 |---|---|
-| `python -m tracker` | start the dashboard |
-| `python -m tracker sync` | read the inbox folder and classify, without a browser |
-| `python -m tracker import file.xlsx` | import your old tracker |
-| `python -m pytest` | run the tests (needs `pip install pytest`) |
+| ![Dashboard](docs/images/dashboard.png) | ![Application timeline](docs/images/application.png) |
 
-## Where things are
+| Review queue | Settings | On a phone |
+|---|---|---|
+| ![Review queue](docs/images/review.png) | ![Settings](docs/images/settings.png) | <img src="docs/images/mobile.png" width="220" alt="Dashboard on a phone"> |
 
-```
-tracker/ingest.py     reads .eml/.mbox into plain dicts
-tracker/classify.py   Ollama classifier + keyword classifier
-tracker/linker.py     which application an email belongs to, and the status rules
-tracker/pipeline.py   the workflow that ties it together
-tracker/app.py        the web dashboard
-data/                 your database and emails (created on first run, keep it private)
-```
+*The screenshots show invented companies and people (generated by `scripts/demo`), not real mail.*
 
-## Limits you should know about
+## What it does
 
-* The model prompt and the keyword rules were tested on invented emails, not on your real inbox.
-  Upload ten real ones first and look at the Review page before trusting the table.
-* Emails are never sent anywhere, but `data/tracker.db` contains their full text. Do not commit it.
-* The dashboard only listens on 127.0.0.1. Do not change that to expose it to a network.
-* If two emails from one company arrive and neither names the role, the app cannot tell the jobs apart
-  and asks you.
+- **Reads mail by itself.** It polls one folder or label over IMAP (built for Proton Mail Bridge, works with any
+  IMAP account) and never changes your mailbox: read-only, nothing is marked as read, moved or deleted.
+- **Classifies with a local model.** Ollama returns type, company, role, interview time and a one-line summary for
+  each email. If the model's computer is asleep, mail waits in a queue and is classified later. Nothing is lost.
+- **Links mail to applications.** By email thread first, then company, then the job title and the sender. Two job
+  titles at one company are two applications. Status follows the emails in time order: applied, assessment,
+  interview, offer; a rejection closes it, and a later positive mail reopens it.
+- **Asks only when it must.** The Review page holds mail it cannot place, for example an invite that names no
+  company, or a reply that could belong to several applications. Your decision is final and never overwritten.
+- **Everything is set up in the dashboard.** Mail connection, folder and model pickers, cutoff date, clean-up,
+  backup download, spreadsheet import. After the first start you never need a terminal.
 
-## Your data stays on your machines
+## Quick start (Windows, about five minutes)
 
-Mail is read-only (the app never sends, moves or deletes anything), classification runs on your own Ollama
-model, and everything is stored in one local SQLite file. Nothing goes to a cloud service. The dashboard has
-no login: it listens on 127.0.0.1 only, so expose it through something that authenticates, such as Tailscale
-Serve, never to the open internet.
+1. Install Python 3.11 or newer and [Ollama](https://ollama.com); then `ollama pull qwen2.5:7b`.
+2. For Proton Mail: start Proton Mail Bridge (paid plan) and keep its username and generated password at hand.
+3. Double-click `run.bat`, open http://127.0.0.1:5055 and follow the banner to **Settings**: connect your mail,
+   pick the folder and the model, press Save. Mail starts loading immediately.
+
+On Linux or macOS: `python -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m tracker`.
+
+To run it all day on an always-on machine, reach it from your phone, and keep the model on a different computer,
+follow **[SETUP.md](SETUP.md)**.
+
+## Privacy and safety
+
+- Mail is read-only and classification runs on your own Ollama model. The data lives in one local SQLite file
+  (`data/tracker.db`). Your mail password is stored in `data/settings.json`, not in the database, so database
+  backups never contain it; the browser never gets it back.
+- **The dashboard has no login.** It listens on 127.0.0.1 only. To use it from a phone, put it behind something
+  that checks who you are, such as Tailscale Serve (not Funnel, which is public). Never expose it to the internet.
+- The app refuses form posts that come from other websites, so a page open in another tab cannot change your
+  settings. It also refuses to send a saved password to a new mail server unless you type it again.
+- Ollama has no login either. Allow its port only from your Tailscale network (see SETUP.md).
 
 ## Other mail providers
 
-Any IMAP account works through the same settings. For Gmail (not tested by the author): turn on 2-step
-verification, create an app password, then set `IMAP_HOST=imap.gmail.com`, `IMAP_PORT=993`,
-`IMAP_SECURITY=ssl`, `IMAP_USER=you@gmail.com`, `IMAP_PASSWORD=<app password>` and `IMAP_MAILBOX=<label name>`.
-Press "Connect and list my folders" in Settings to see the exact names.
+Any IMAP account works. For Gmail (not tested by the author): turn on 2-step verification, create an app password,
+then in Settings use server `imap.gmail.com`, port `993`, security SSL, your address and the app password. Press
+"Connect and list my folders" to see the exact label names.
 
 ## Date cutoff
 
-`EARLIEST_DATE` (default 2026-01-01) is a hard cutoff: older mail is never stored. Change it in Settings. After
-raising it, Settings shows how much is now older and a button to delete it (a backup is made first). Lowering
-it makes the next check re-read the label from the start.
+Mail sent before a date is never stored (default 2026-01-01; set it in Settings, empty means no cutoff). After raising
+it, Settings shows how much is now older and a button to delete it, with a backup made first. Lowering it makes the
+next check read the folder from the start again; duplicates are skipped.
 
-## Contributing / publishing checklist
+## How it decides things
 
-Run `bash scripts/prepublish-check.sh` before every push: it fails if a database, mail file, spreadsheet or
-filled-in `.env` is tracked by git.
+- **The model decides.** The local model's answer stands. A set of German and English keyword rules runs as a
+  fallback if the model returns unusable output; that mail is flagged for you. Small models are good, not perfect:
+  fix mistakes on the Review page.
+- **Thread, then company, then sender.** Replies are linked through the email headers. If that fails, by company
+  name, then by the sender's domain (recruiting platforms such as Personio or Greenhouse are ignored, as they write
+  for many employers). A recruiter who already wrote about one application is a strong hint, even from another address.
+- **A confirmation means a new application** unless the same job title is already tracked.
+- **Status is derived from emails.** An application created from mail takes its status only from the mail that still
+  exists, so history removed by the cutoff cannot leave a stale status behind.
+- **A status you set by hand is locked**, so emails stop changing it. Tick "Let emails update the status again" to undo.
+- **No answer for 14 days** is shown under "applied".
+
+## Layout
+
+```
+tracker/ingest.py       reads .eml/.mbox/IMAP messages into plain dicts
+tracker/imap_source.py  read-only IMAP access
+tracker/classify.py     Ollama classifier and keyword fallback
+tracker/linker.py       which application an email belongs to, and the status rules
+tracker/pipeline.py     the workflow: collect, classify, link, one-time data fixes
+tracker/service.py      the background worker
+tracker/settings.py     settings saved from the dashboard
+tracker/app.py          the web dashboard
+deploy/                 systemd units and installer for an always-on machine
+scripts/                publishing check, demo data and screenshot generator
+tests/                  pytest suite (fake mail server and fake Ollama, no network needed)
+```
+
+Advanced commands such as `python -m tracker sync`, `prune`, `backup` and `imap-list` exist for scripts and the
+systemd timer; they are never required.
+
+## Development
+
+```
+pip install -r requirements.txt pytest
+python -m pytest
+```
+
+Regenerate the screenshots on invented data (needs `pip install playwright && playwright install chromium`, and ffmpeg for the GIF):
+
+```
+TRACKER_DATA=/tmp/demo python scripts/demo/seed.py
+TRACKER_DATA=/tmp/demo python scripts/demo/serve_demo.py 5077 &
+python scripts/demo/screenshots.py http://127.0.0.1:5077 docs/images
+```
+
+Before every push run `bash scripts/prepublish-check.sh`. It fails if a database, mail file, spreadsheet, PDF or
+filled-in `.env` is tracked by git or in its history.
+
+## Limits
+
+- Tested with Proton Mail Bridge and Ollama (qwen2.5:7b). Gmail and other providers are untested.
+- Classification quality depends on the model. Check the Review page while you get started.
+- Role matching relies on the job titles the model extracts; an odd or empty title can put a mail on the wrong
+  application. Fix it on the Review page or in the application's page.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

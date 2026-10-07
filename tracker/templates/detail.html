@@ -3,7 +3,7 @@
 <p><a href="{{ url_for('index') }}">&larr; All applications</a></p>
 <div class="panel">
   <h2 style="margin:0 0 4px">{{ a.company }} <span class="chip {{ a.status }}">{{ a.status }}</span></h2>
-  <div class="muted">{{ a.role }}{% if a.interview_at %} &middot; interview {{ a.interview_at }}{% endif %}</div>
+  <div class="muted">{{ a.role }}{% if a.interview_at %} &middot; interview {{ a.interview_at|nice_dt }}{% endif %}</div>
 </div>
 
 <div class="panel">
